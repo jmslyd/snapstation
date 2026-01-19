@@ -26,8 +26,17 @@
         </div>
 
         <div class="controls-dock">
+            
             <div class="layout-scroll">
-                <button class="layout-chip" onclick="setFormat(1, 'single')">1 Photo</button>
+                <span class="tiny-label">RATIO:</span>
+                <button class="ratio-chip" onclick="setRatio(1)">1:1</button>
+                <button class="ratio-chip active" onclick="setRatio(1.333)">4:3</button>
+                <button class="ratio-chip" onclick="setRatio(1.777)">16:9</button>
+            </div>
+
+            <div class="layout-scroll">
+                <span class="tiny-label">GRID:</span>
+                <button class="layout-chip" onclick="setFormat(1, 'single')">1</button>
                 <button class="layout-chip" onclick="setFormat(3, 'strip')">3 Strip</button>
                 <button class="layout-chip active" onclick="setFormat(4, 'grid')">4 Grid</button>
                 <button class="layout-chip" onclick="setFormat(4, 'strip')">4 Strip</button>
@@ -51,10 +60,11 @@
 
         <div class="canvas-stage">
             <canvas id="canvas"></canvas>
-            <div id="hint-bubble">Tap any photo to retake it ↺</div>
+            <div id="hint-bubble">Tap photo to Select. Tap again to Retake.</div>
         </div>
 
         <div class="editor-dock">
+            
             <div class="dock-section">
                 <span class="dock-label">FILTERS</span>
                 <div class="scroll-row">
@@ -77,6 +87,7 @@
                     <button class="color-dot" style="background: #e0e0e0" onclick="setPaper('#e0e0e0')"></button>
                 </div>
             </div>
+
         </div>
     </section>
 
