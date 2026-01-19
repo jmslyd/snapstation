@@ -11,9 +11,7 @@ let currentFilter = 'none';
 let currentPaper = '#ffffff'; 
 let baseState = null;
 let currentFacingMode = 'user';
-let retakeIndex = -1; // Tracks which photo to retake (0-3) or -1 for none
-
-// Grid Geometry (Stored to detect taps on specific photos)
+let retakeIndex = -1;
 let photoZones = []; 
 
 // 1. Initialize Camera
@@ -24,19 +22,16 @@ async function initCamera() {
         const stream = await navigator.mediaDevices.getUserMedia({ 
             video: { 
                 facingMode: currentFacingMode,
-                aspectRatio: { ideal: 1.3333 }, // 4:3 Ratio
+                aspectRatio: { ideal: 1.3333 }, 
                 width: { ideal: 1280 } 
             },
             audio: false 
         });
         video.srcObject = stream;
-        
-        // Mirror Logic: Mirror Front (user), Normal Back (env)
         video.style.transform = (currentFacingMode === 'user') ? 'scaleX(-1)' : 'scaleX(1)';
         video.onloadedmetadata = () => video.play();
-
     } catch (err) {
-        console.log("Camera Error");
+        console.log("Camera init error");
     }
 }
 initCamera();
@@ -48,18 +43,17 @@ document.getElementById('switch-cam-btn').addEventListener('click', () => {
 
 // 2. Capture Logic
 document.getElementById('shutter-btn').addEventListener('click', async () => {
-    
-    // RETAKE MODE: Only take 1 photo to replace specific slot
+    // Retake Mode
     if (retakeIndex !== -1) {
         await runCountdown(3);
         flash.classList.add('flash-fire');
-        capturedImages[retakeIndex] = snapPhoto(); // Overwrite
+        capturedImages[retakeIndex] = snapPhoto(); 
         setTimeout(() => flash.classList.remove('flash-fire'), 150);
         finishRetake();
         return;
     }
 
-    // NORMAL MODE: Take full sequence
+    // Normal Mode
     capturedImages = [];
     document.querySelector('.layout-scroll').style.opacity = '0';
     document.getElementById('shutter-btn').style.pointerEvents = 'none';
@@ -82,7 +76,6 @@ function snapPhoto() {
     tCanvas.height = video.videoHeight;
     const tCtx = tCanvas.getContext('2d');
     tCtx.translate(tCanvas.width, 0);
-    // Apply Mirroring to the Photo
     tCtx.scale(currentFacingMode === 'user' ? -1 : 1, 1);
     tCtx.drawImage(video, 0, 0);
     return tCanvas;
@@ -90,13 +83,11 @@ function snapPhoto() {
 
 function enterEditor() {
     createComposite();
-    // Switch Screen
     document.getElementById('capture-page').classList.remove('active');
     document.getElementById('capture-page').classList.add('hidden');
     document.getElementById('result-page').classList.remove('hidden');
     document.getElementById('result-page').classList.add('active');
 
-    // Reset Controls
     document.querySelector('.layout-scroll').style.opacity = '1';
     document.getElementById('shutter-btn').style.pointerEvents = 'auto';
     document.getElementById('switch-cam-btn').style.opacity = '1';
@@ -107,27 +98,35 @@ function finishRetake() {
     enterEditor();
 }
 
-// 3. Composite Logic & Click Detection
+// 3. Composite Logic (Now supports 6 Grid)
 function createComposite() {
     if(capturedImages.length === 0) return;
-    photoZones = []; // Reset click zones
+    photoZones = []; 
 
     const gap = 20; const padding = 40; const footerH = 120;
     const singleW = capturedImages[0].width;
     const singleH = capturedImages[0].height;
     
     let finalW, finalH;
-    const isStrip = (config.layout === 'strip' || config.layout === 'single');
 
-    if (isStrip) {
-        finalW = singleW + (padding * 2);
-        finalH = (singleH * config.count) + (gap * (config.count - 1)) + (padding * 2) + footerH;
-    } else {
+    // Detect Layout Type
+    if (config.count === 6 && config.layout === 'grid') {
+        // --- 6 PHOTO GRID (2 Cols x 3 Rows) ---
+        finalW = (singleW * 2) + gap + (padding * 2);
+        finalH = (singleH * 3) + (gap * 2) + (padding * 2) + footerH;
+    } 
+    else if (config.count === 4 && config.layout === 'grid') {
+        // --- 4 PHOTO GRID (2 Cols x 2 Rows) ---
         finalW = (singleW * 2) + gap + (padding * 2);
         finalH = (singleH * 2) + gap + (padding * 2) + footerH;
     }
+    else {
+        // --- VERTICAL STRIPS (1, 3, 4, 5) ---
+        finalW = singleW + (padding * 2);
+        finalH = (singleH * config.count) + (gap * (config.count - 1)) + (padding * 2) + footerH;
+    }
 
-    // iOS Crash Protection: Downscale if too huge
+    // iOS Scale Fix
     let scaleFactor = 1;
     if (finalH > 3000) {
         scaleFactor = 3000 / finalH;
@@ -143,17 +142,27 @@ function createComposite() {
 
     capturedImages.forEach((img, i) => {
         let x, y;
-        if (isStrip) {
-            x = padding;
-            y = padding + (i * (singleH + gap));
-        } else {
+
+        if (config.count === 6 && config.layout === 'grid') {
+            // 6 Grid Logic (2 cols)
             const col = i % 2;
             const row = Math.floor(i / 2);
             x = padding + (col * (singleW + gap));
             y = padding + (row * (singleH + gap));
         }
+        else if (config.count === 4 && config.layout === 'grid') {
+            // 4 Grid Logic (2 cols)
+            const col = i % 2;
+            const row = Math.floor(i / 2);
+            x = padding + (col * (singleW + gap));
+            y = padding + (row * (singleH + gap));
+        }
+        else {
+            // Strip Logic
+            x = padding;
+            y = padding + (i * (singleH + gap));
+        }
         
-        // Draw Scaled Photo
         const dX = Math.floor(x * scaleFactor);
         const dY = Math.floor(y * scaleFactor);
         const dW = Math.floor(singleW * scaleFactor);
@@ -161,7 +170,6 @@ function createComposite() {
 
         ctx.drawImage(img, dX, dY, dW, dH);
 
-        // Save Zone for Click Detection
         photoZones.push({ index: i, x: dX, y: dY, w: dW, h: dH });
     });
 
@@ -189,7 +197,7 @@ function render() {
     ctx.drawImage(baseState, 0, 0);
 }
 
-// 4. "Tap to Retake" Logic
+// 4. Tap to Retake
 canvas.addEventListener('click', (e) => {
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
@@ -198,7 +206,6 @@ canvas.addEventListener('click', (e) => {
     const clickX = (e.clientX - rect.left) * scaleX;
     const clickY = (e.clientY - rect.top) * scaleY;
 
-    // Check which photo zone was clicked
     for (let zone of photoZones) {
         if (clickX >= zone.x && clickX <= zone.x + zone.w &&
             clickY >= zone.y && clickY <= zone.y + zone.h) {
@@ -219,7 +226,7 @@ function triggerRetake(idx) {
     document.getElementById('capture-page').classList.add('active');
 }
 
-// 5. Mobile Save
+// 5. Save
 async function shareCanvas() {
     canvas.toBlob(async (blob) => {
         const file = new File([blob], "snapstation.png", { type: "image/png" });
