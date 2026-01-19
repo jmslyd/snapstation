@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>SnapStation 4:3</title>
+    <title>SnapStation Pro</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap" rel="stylesheet">
 </head>
@@ -13,6 +13,7 @@
     <div id="countdown" class="hidden"></div>
 
     <section id="capture-page" class="screen active">
+        
         <div class="top-bar">
             <div class="brand">SNAP<span class="accent">STATION</span></div>
             <button id="switch-cam-btn" class="icon-btn">
@@ -43,15 +44,17 @@
 
     <section id="result-page" class="screen hidden">
         <div class="editor-nav">
-            <button id="back-btn" class="text-btn">← Back</button>
-            <button id="download-btn" class="pill-btn primary">Save ⬇</button>
+            <button id="back-btn" class="text-btn">← New Session</button>
+            <button id="download-btn" class="pill-btn primary">Save Photo ⬇</button>
         </div>
 
         <div class="canvas-stage">
             <canvas id="canvas"></canvas>
+            <div id="hint-bubble">Tap any photo to retake it ↺</div>
         </div>
 
         <div class="editor-dock">
+            
             <div class="dock-section">
                 <span class="dock-label">FILTERS</span>
                 <div class="scroll-row">
@@ -74,6 +77,7 @@
                     <button class="color-dot" style="background: #e0e0e0" onclick="setPaper('#e0e0e0')"></button>
                 </div>
             </div>
+
         </div>
     </section>
 
