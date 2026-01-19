@@ -26,8 +26,6 @@ async function initCamera() {
     }
 
     try {
-        // We attempt to get the ideal ratio from hardware, 
-        // but the CSS/Software crop will ensure it's correct visually.
         const stream = await navigator.mediaDevices.getUserMedia({ 
             video: { 
                 facingMode: currentFacingMode,
@@ -39,7 +37,6 @@ async function initCamera() {
         handleStreamSuccess(stream);
 
     } catch (err) {
-        // Fallback for tricky devices
         try {
             const basicStream = await navigator.mediaDevices.getUserMedia({ 
                 video: { facingMode: currentFacingMode },
@@ -54,25 +51,24 @@ async function initCamera() {
 
 function handleStreamSuccess(stream) {
     video.srcObject = stream;
-    // Mirror Front, Normal Back
     video.style.transform = (currentFacingMode === 'user') ? 'scaleX(-1)' : 'scaleX(1)';
     video.onloadedmetadata = () => video.play().catch(e => console.log(e));
 }
 
 initCamera();
 
-// --- UPDATED RATIO SWITCHER ---
+// Ratio Switcher
 window.setRatio = (ratio) => {
     currentTargetRatio = ratio;
     
-    // 1. Update UI Chips
+    // Update UI
     document.querySelectorAll('.ratio-chip').forEach(b => b.classList.remove('active'));
     event.target.classList.add('active');
 
-    // 2. NEW: Update CSS Variable to instantly mask the video preview
+    // Update CSS Variable for Video Mask
     document.documentElement.style.setProperty('--target-ratio', ratio);
 
-    // 3. Restart camera (good practice to try and get native stream if possible)
+    // Restart camera
     initCamera();
 };
 
@@ -83,7 +79,6 @@ document.getElementById('switch-cam-btn').addEventListener('click', () => {
 
 // 2. Capture Logic
 document.getElementById('shutter-btn').addEventListener('click', async () => {
-    // Retake Mode
     if (retakeIndex !== -1) {
         await runCountdown(3);
         flash.classList.add('flash-fire');
@@ -93,7 +88,6 @@ document.getElementById('shutter-btn').addEventListener('click', async () => {
         return;
     }
 
-    // Normal Sequence
     capturedImages = [];
     document.querySelectorAll('.layout-scroll').forEach(el => el.style.opacity = '0'); 
     document.getElementById('shutter-btn').style.pointerEvents = 'none';
@@ -114,23 +108,18 @@ document.getElementById('shutter-btn').addEventListener('click', async () => {
 function snapPhoto() {
     const tCanvas = document.createElement('canvas');
     
-    // 1. Get raw video dimensions
     const vidW = video.videoWidth;
     const vidH = video.videoHeight;
     const camRatio = vidW / vidH;
 
-    // 2. Calculate Crop Dimensions to match currentTargetRatio
     let targetW, targetH;
     let sX = 0, sY = 0;
 
-    // Logic: Crop the center of the video to match the desired shape
     if (camRatio > currentTargetRatio) {
-        // Video is wider than needed -> Crop sides
         targetH = vidH;
         targetW = vidH * currentTargetRatio;
         sX = (vidW - targetW) / 2;
     } else {
-        // Video is taller than needed -> Crop top/bottom
         targetW = vidW;
         targetH = vidW / currentTargetRatio;
         sY = (vidH - targetH) / 2;
@@ -141,17 +130,12 @@ function snapPhoto() {
     
     const tCtx = tCanvas.getContext('2d');
     
-    // 3. Mirror Logic (Complex with Cropping)
     if (currentFacingMode === 'user') {
-        // Move origin to center, flip, move back
         tCtx.translate(targetW, 0);
         tCtx.scale(-1, 1);
     } 
     
-    // 4. Draw clipped image
-    // drawImage(source, srcX, srcY, srcW, srcH, destX, destY, destW, destH)
     tCtx.drawImage(video, sX, sY, targetW, targetH, 0, 0, targetW, targetH);
-    
     return tCanvas;
 }
 
@@ -183,7 +167,6 @@ function createComposite() {
     
     let finalW, finalH;
 
-    // Layout Dimensions
     if (config.count === 6 && config.layout === 'grid') {
         finalW = (singleW * 2) + gap + (padding * 2);
         finalH = (singleH * 3) + (gap * 2) + (padding * 2) + footerH;
@@ -213,7 +196,6 @@ function createComposite() {
 
     capturedImages.forEach((img, i) => {
         let x, y;
-        // Position Logic
         if (config.count === 6 && config.layout === 'grid') {
             const col = i % 2;
             const row = Math.floor(i / 2);
@@ -238,7 +220,6 @@ function createComposite() {
 
         ctx.drawImage(img, dX, dY, dW, dH);
 
-        // Draw Selection Border
         if (i === swapSelectedIndex) {
             ctx.strokeStyle = '#3b82f6'; 
             ctx.lineWidth = 10 * scaleFactor;
@@ -248,7 +229,6 @@ function createComposite() {
         photoZones.push({ index: i, x: dX, y: dY, w: dW, h: dH });
     });
 
-    // Branding
     ctx.textAlign = 'center';
     const isDark = (currentPaper === '#000000');
     ctx.fillStyle = isDark ? '#ffffff' : '#111111';
@@ -272,7 +252,7 @@ function render() {
     ctx.drawImage(baseState, 0, 0);
 }
 
-// 4. Tap Handler (Select, Swap, Retake)
+// 4. Tap Handler
 const handleInteraction = (e) => {
     e.preventDefault(); 
     
@@ -287,7 +267,6 @@ const handleInteraction = (e) => {
     for (let zone of photoZones) {
         if (clickX >= zone.x && clickX <= zone.x + zone.w &&
             clickY >= zone.y && clickY <= zone.y + zone.h) {
-            
             handlePhotoTap(zone.index);
             break;
         }
@@ -340,17 +319,32 @@ function triggerRetake(idx) {
     document.getElementById('capture-page').classList.add('active');
 }
 
-// 5. Mobile Save
+// 5. SMART SAVE: Detect Mobile vs Laptop
 async function shareCanvas() {
-    swapSelectedIndex = -1;
+    swapSelectedIndex = -1; // Remove blue border
     createComposite(); 
     
     setTimeout(() => {
         canvas.toBlob(async (blob) => {
             const file = new File([blob], "snapstation.png", { type: "image/png" });
-            if (navigator.share && navigator.canShare({ files: [file] })) {
-                try { await navigator.share({ files: [file] }); } catch (err) {}
-            } else {
+
+            // DETECT MOBILE DEVICE
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+            // IF MOBILE -> Use Share Sheet
+            if (isMobile && navigator.share && navigator.canShare({ files: [file] })) {
+                try {
+                    await navigator.share({
+                        files: [file],
+                        title: 'SnapStation Photo',
+                        text: 'My Photo Strip'
+                    });
+                } catch (err) {
+                    console.log("Share cancelled or failed");
+                }
+            } 
+            // IF LAPTOP/PC -> Force Direct Download
+            else {
                 const link = document.createElement('a');
                 link.download = `snapstation-${Date.now()}.png`;
                 link.href = URL.createObjectURL(blob);
