@@ -4,38 +4,42 @@ const ctx = canvas.getContext('2d');
 const flash = document.getElementById('flash-overlay');
 const countdownEl = document.getElementById('countdown');
 
-// State
+// State Variables
 let config = { count: 4, layout: 'grid' }; 
 let capturedImages = [];
 let currentFilter = 'none';
 let currentPaper = '#ffffff'; 
 let baseState = null;
-let currentFacingMode = 'user'; // Start with Front Camera
+let currentFacingMode = 'user'; // Front Camera default
 let retakeIndex = -1;
 let photoZones = []; 
+let currentTargetRatio = 1.333; // Default 4:3
+let swapSelectedIndex = -1; 
 
-// 1. Initialize Camera (Robust & Constraint Free)
+// Set initial CSS variable for ratio
+document.documentElement.style.setProperty('--target-ratio', currentTargetRatio);
+
+// 1. Initialize Camera (Robust)
 async function initCamera() {
-    // Stop any existing stream
     if (video.srcObject) {
         video.srcObject.getTracks().forEach(track => track.stop());
     }
 
     try {
-        // Try strict constraints first (HD Quality)
+        // We attempt to get the ideal ratio from hardware, 
+        // but the CSS/Software crop will ensure it's correct visually.
         const stream = await navigator.mediaDevices.getUserMedia({ 
             video: { 
                 facingMode: currentFacingMode,
-                width: { ideal: 1280 }, 
-                height: { ideal: 720 }
+                aspectRatio: { ideal: currentTargetRatio },
+                width: { ideal: 1280 }
             },
             audio: false 
         });
         handleStreamSuccess(stream);
 
     } catch (err) {
-        console.warn("HD init failed, retrying with basic settings...");
-        // Fallback: Basic constraints (Fixes white screen on some Androids)
+        // Fallback for tricky devices
         try {
             const basicStream = await navigator.mediaDevices.getUserMedia({ 
                 video: { facingMode: currentFacingMode },
@@ -43,30 +47,35 @@ async function initCamera() {
             });
             handleStreamSuccess(basicStream);
         } catch (e) {
-            alert("Camera refused to load. Please check permissions.");
+            alert("Camera Error: Please allow camera access.");
         }
     }
 }
 
 function handleStreamSuccess(stream) {
     video.srcObject = stream;
-    
-    // Preview Mirroring: Mirror Front, Normal Back
-    if (currentFacingMode === 'user') {
-        video.style.transform = 'scaleX(-1)';
-    } else {
-        video.style.transform = 'scaleX(1)';
-    }
-
-    // Force Play
-    video.onloadedmetadata = () => {
-        video.play().catch(e => console.log("Play error", e));
-    };
+    // Mirror Front, Normal Back
+    video.style.transform = (currentFacingMode === 'user') ? 'scaleX(-1)' : 'scaleX(1)';
+    video.onloadedmetadata = () => video.play().catch(e => console.log(e));
 }
 
 initCamera();
 
-// Switch Camera
+// --- UPDATED RATIO SWITCHER ---
+window.setRatio = (ratio) => {
+    currentTargetRatio = ratio;
+    
+    // 1. Update UI Chips
+    document.querySelectorAll('.ratio-chip').forEach(b => b.classList.remove('active'));
+    event.target.classList.add('active');
+
+    // 2. NEW: Update CSS Variable to instantly mask the video preview
+    document.documentElement.style.setProperty('--target-ratio', ratio);
+
+    // 3. Restart camera (good practice to try and get native stream if possible)
+    initCamera();
+};
+
 document.getElementById('switch-cam-btn').addEventListener('click', () => {
     currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
     initCamera();
@@ -74,8 +83,7 @@ document.getElementById('switch-cam-btn').addEventListener('click', () => {
 
 // 2. Capture Logic
 document.getElementById('shutter-btn').addEventListener('click', async () => {
-    
-    // RETAKE MODE
+    // Retake Mode
     if (retakeIndex !== -1) {
         await runCountdown(3);
         flash.classList.add('flash-fire');
@@ -85,9 +93,9 @@ document.getElementById('shutter-btn').addEventListener('click', async () => {
         return;
     }
 
-    // NORMAL MODE
+    // Normal Sequence
     capturedImages = [];
-    document.querySelector('.layout-scroll').style.opacity = '0';
+    document.querySelectorAll('.layout-scroll').forEach(el => el.style.opacity = '0'); 
     document.getElementById('shutter-btn').style.pointerEvents = 'none';
     document.getElementById('switch-cam-btn').style.opacity = '0';
     
@@ -102,24 +110,48 @@ document.getElementById('shutter-btn').addEventListener('click', async () => {
     enterEditor();
 });
 
-// --- THE CRITICAL FIX ---
+// --- SMART SNAP (Software Crop) ---
 function snapPhoto() {
     const tCanvas = document.createElement('canvas');
-    tCanvas.width = video.videoWidth;
-    tCanvas.height = video.videoHeight;
+    
+    // 1. Get raw video dimensions
+    const vidW = video.videoWidth;
+    const vidH = video.videoHeight;
+    const camRatio = vidW / vidH;
+
+    // 2. Calculate Crop Dimensions to match currentTargetRatio
+    let targetW, targetH;
+    let sX = 0, sY = 0;
+
+    // Logic: Crop the center of the video to match the desired shape
+    if (camRatio > currentTargetRatio) {
+        // Video is wider than needed -> Crop sides
+        targetH = vidH;
+        targetW = vidH * currentTargetRatio;
+        sX = (vidW - targetW) / 2;
+    } else {
+        // Video is taller than needed -> Crop top/bottom
+        targetW = vidW;
+        targetH = vidW / currentTargetRatio;
+        sY = (vidH - targetH) / 2;
+    }
+
+    tCanvas.width = targetW;
+    tCanvas.height = targetH;
+    
     const tCtx = tCanvas.getContext('2d');
     
-    // BUG FIX: Only translate (move origin) if we are flipping the image!
+    // 3. Mirror Logic (Complex with Cropping)
     if (currentFacingMode === 'user') {
-        // Front Camera: Move to right edge, Flip left
-        tCtx.translate(tCanvas.width, 0);
-        tCtx.scale(-1, 1); 
-    } else {
-        // Back Camera: Draw normally (No translation needed)
-        tCtx.scale(1, 1);
-    }
+        // Move origin to center, flip, move back
+        tCtx.translate(targetW, 0);
+        tCtx.scale(-1, 1);
+    } 
     
-    tCtx.drawImage(video, 0, 0);
+    // 4. Draw clipped image
+    // drawImage(source, srcX, srcY, srcW, srcH, destX, destY, destW, destH)
+    tCtx.drawImage(video, sX, sY, targetW, targetH, 0, 0, targetW, targetH);
+    
     return tCanvas;
 }
 
@@ -130,7 +162,7 @@ function enterEditor() {
     document.getElementById('result-page').classList.remove('hidden');
     document.getElementById('result-page').classList.add('active');
 
-    document.querySelector('.layout-scroll').style.opacity = '1';
+    document.querySelectorAll('.layout-scroll').forEach(el => el.style.opacity = '1');
     document.getElementById('shutter-btn').style.pointerEvents = 'auto';
     document.getElementById('switch-cam-btn').style.opacity = '1';
 }
@@ -151,6 +183,7 @@ function createComposite() {
     
     let finalW, finalH;
 
+    // Layout Dimensions
     if (config.count === 6 && config.layout === 'grid') {
         finalW = (singleW * 2) + gap + (padding * 2);
         finalH = (singleH * 3) + (gap * 2) + (padding * 2) + footerH;
@@ -180,6 +213,7 @@ function createComposite() {
 
     capturedImages.forEach((img, i) => {
         let x, y;
+        // Position Logic
         if (config.count === 6 && config.layout === 'grid') {
             const col = i % 2;
             const row = Math.floor(i / 2);
@@ -203,9 +237,18 @@ function createComposite() {
         const dH = Math.floor(singleH * scaleFactor);
 
         ctx.drawImage(img, dX, dY, dW, dH);
+
+        // Draw Selection Border
+        if (i === swapSelectedIndex) {
+            ctx.strokeStyle = '#3b82f6'; 
+            ctx.lineWidth = 10 * scaleFactor;
+            ctx.strokeRect(dX, dY, dW, dH);
+        }
+
         photoZones.push({ index: i, x: dX, y: dY, w: dW, h: dH });
     });
 
+    // Branding
     ctx.textAlign = 'center';
     const isDark = (currentPaper === '#000000');
     ctx.fillStyle = isDark ? '#ffffff' : '#111111';
@@ -229,23 +272,65 @@ function render() {
     ctx.drawImage(baseState, 0, 0);
 }
 
-// 4. Tap to Retake
-canvas.addEventListener('click', (e) => {
+// 4. Tap Handler (Select, Swap, Retake)
+const handleInteraction = (e) => {
+    e.preventDefault(); 
+    
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
-    const clickX = (e.clientX - rect.left) * scaleX;
-    const clickY = (e.clientY - rect.top) * scaleY;
+    const clickX = (clientX - rect.left) * scaleX;
+    const clickY = (clientY - rect.top) * scaleY;
 
     for (let zone of photoZones) {
         if (clickX >= zone.x && clickX <= zone.x + zone.w &&
             clickY >= zone.y && clickY <= zone.y + zone.h) {
             
-            if(confirm(`Retake Photo #${zone.index + 1}?`)) triggerRetake(zone.index);
+            handlePhotoTap(zone.index);
             break;
         }
     }
-});
+};
+
+function handlePhotoTap(clickedIndex) {
+    if (swapSelectedIndex === -1) {
+        swapSelectedIndex = clickedIndex;
+        createComposite();
+        showToast("Tap another to swap, or tap again to retake.");
+    } 
+    else if (swapSelectedIndex === clickedIndex) {
+        swapSelectedIndex = -1;
+        createComposite(); 
+        if(confirm(`Retake Photo #${clickedIndex + 1}?`)) {
+            triggerRetake(clickedIndex);
+        }
+    } 
+    else {
+        const temp = capturedImages[swapSelectedIndex];
+        capturedImages[swapSelectedIndex] = capturedImages[clickedIndex];
+        capturedImages[clickedIndex] = temp;
+        
+        swapSelectedIndex = -1;
+        createComposite();
+        showToast("Swapped!");
+    }
+}
+
+function showToast(msg) {
+    const hint = document.getElementById('hint-bubble');
+    hint.innerText = msg;
+    hint.style.background = "var(--primary)";
+    hint.style.opacity = "1";
+    setTimeout(() => {
+        hint.style.background = "rgba(0,0,0,0.6)";
+        hint.innerText = "Tap photo to Select. Tap again to Retake.";
+    }, 2500);
+}
+
+canvas.addEventListener('click', handleInteraction);
+canvas.addEventListener('touchstart', handleInteraction, {passive: false});
 
 function triggerRetake(idx) {
     retakeIndex = idx;
@@ -255,19 +340,24 @@ function triggerRetake(idx) {
     document.getElementById('capture-page').classList.add('active');
 }
 
-// 5. Save
+// 5. Mobile Save
 async function shareCanvas() {
-    canvas.toBlob(async (blob) => {
-        const file = new File([blob], "snapstation.png", { type: "image/png" });
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-            try { await navigator.share({ files: [file] }); } catch (err) {}
-        } else {
-            const link = document.createElement('a');
-            link.download = `snapstation-${Date.now()}.png`;
-            link.href = URL.createObjectURL(blob);
-            link.click();
-        }
-    }, 'image/png');
+    swapSelectedIndex = -1;
+    createComposite(); 
+    
+    setTimeout(() => {
+        canvas.toBlob(async (blob) => {
+            const file = new File([blob], "snapstation.png", { type: "image/png" });
+            if (navigator.share && navigator.canShare({ files: [file] })) {
+                try { await navigator.share({ files: [file] }); } catch (err) {}
+            } else {
+                const link = document.createElement('a');
+                link.download = `snapstation-${Date.now()}.png`;
+                link.href = URL.createObjectURL(blob);
+                link.click();
+            }
+        }, 'image/png');
+    }, 50);
 }
 
 document.getElementById('download-btn').addEventListener('click', shareCanvas);
