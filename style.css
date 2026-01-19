@@ -3,6 +3,8 @@
     --primary: #3b82f6;
     --accent: #ff4757;
     --text: #ffffff;
+    /* NEW: Default Aspect Ratio Variable (4:3) */
+    --target-ratio: 1.333;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; }
@@ -16,7 +18,6 @@ body {
     overscroll-behavior: none;
 }
 
-/* SCREEN ANIMATIONS */
 .screen {
     position: fixed; inset: 0;
     display: flex; flex-direction: column;
@@ -27,7 +28,7 @@ body {
 .screen.hidden { transform: translateY(100%); pointer-events: none; }
 .screen.active { transform: translateY(0); }
 
-/* --- CAMERA UI --- */
+/* TOP BAR */
 .top-bar {
     position: absolute; top: 0; left: 0; right: 0;
     padding: 20px; 
@@ -36,7 +37,6 @@ body {
     background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
     z-index: 50;
 }
-
 .brand { font-weight: 900; font-size: 1.2rem; letter-spacing: -1px; }
 .accent { color: var(--primary); }
 
@@ -47,40 +47,67 @@ body {
     cursor: pointer; backdrop-filter: blur(5px);
 }
 
+/* --- UPDATED VIDEO STAGE --- */
 .video-container {
-    flex: 1; width: 100%; height: 100%;
-    display: flex; justify-content: center; align-items: center;
+    flex: 1; 
+    width: 100%; 
+    /* Center the video frame */
+    display: flex; 
+    justify-content: center; 
+    align-items: center;
     position: relative; z-index: 0;
-    background: #111;
-}
-video { 
-    width: 100%; height: 100%; 
-    object-fit: cover; max-width: 100vw;
+    background: #000; /* Black bars for areas outside ratio */
+    padding: 20px 0; /* Breathing room */
 }
 
-/* CONTROLS DOCK */
+video { 
+    /* The Magic: Force the video to the selected ratio */
+    aspect-ratio: var(--target-ratio);
+    /* Ensure the video fills the ratio box, cropping excess */
+    object-fit: cover;
+    
+    /* Ensure it fits within the screen bounds */
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    
+    /* Polish */
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    transition: aspect-ratio 0.3s ease-in-out; /* Smooth switching */
+}
+
+/* CONTROLS */
 .controls-dock {
     position: absolute; bottom: 0; left: 0; right: 0;
     background: linear-gradient(to top, rgba(0,0,0,0.95) 30%, transparent);
     padding: 20px; 
     padding-bottom: max(30px, env(safe-area-inset-bottom));
-    display: flex; flex-direction: column; align-items: center; gap: 20px;
+    display: flex; flex-direction: column; align-items: center; gap: 15px;
     z-index: 50; width: 100%;
 }
 
-/* LAYOUT SCROLL (CENTERED FIX) */
 .layout-scroll {
-    display: flex; gap: 12px; overflow-x: auto; 
-    padding: 5px 20px;
-    
-    width: fit-content; /* Shrink to fit content */
-    max-width: 100%;    /* But don't overflow screen */
-    margin: 0 auto;     /* Center horizontal */
-    
-    -webkit-overflow-scrolling: touch; 
-    scrollbar-width: none;
+    display: flex; gap: 10px; overflow-x: auto; 
+    padding: 5px 20px; 
+    width: fit-content; max-width: 100%; margin: 0 auto;
+    align-items: center; justify-content: center;
+    -webkit-overflow-scrolling: touch; scrollbar-width: none;
 }
 .layout-scroll::-webkit-scrollbar { display: none; }
+
+.tiny-label {
+    font-size: 0.65rem; color: #888; font-weight: 800; letter-spacing: 1px; margin-right: 5px;
+}
+
+/* CHIPS */
+.ratio-chip {
+    background: transparent; border: 1px solid #444;
+    color: #888; padding: 6px 12px; border-radius: 15px; flex-shrink: 0;
+    font-size: 0.75rem; white-space: nowrap; cursor: pointer;
+}
+.ratio-chip.active { background: #333; color: white; border-color: white; font-weight: 700; }
 
 .layout-chip {
     background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.1);
@@ -101,7 +128,7 @@ video {
 .camera-lens { width: 64px; height: 64px; background: white; border-radius: 50%; transition: 0.2s; }
 .main-trigger:active .camera-lens { width: 58px; height: 58px; background: var(--accent); }
 
-/* --- EDITOR UI --- */
+/* EDITOR */
 #result-page { background: #111; z-index: 60; }
 .editor-nav {
     display: flex; justify-content: space-between; align-items: center;
@@ -120,14 +147,12 @@ video {
     display: flex; justify-content: center; align-items: center;
     position: relative; overflow: hidden; padding: 20px;
 }
-canvas {
-    max-width: 100%; max-height: 100%;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-}
+canvas { max-width: 100%; max-height: 100%; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
 #hint-bubble {
     position: absolute; bottom: 20px; 
     background: rgba(0,0,0,0.6); padding: 8px 16px; 
     border-radius: 20px; font-size: 12px; color: white; pointer-events: none;
+    transition: 0.3s opacity;
 }
 
 .editor-dock {
