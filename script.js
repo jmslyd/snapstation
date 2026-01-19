@@ -10,26 +10,48 @@ let capturedImages = [];
 let currentFilter = 'none';
 let currentPaper = '#ffffff'; 
 let baseState = null;
+let currentFacingMode = 'user'; // 'user' (Front) or 'environment' (Back)
 
-// 1. Initialize Camera (Flexible)
+// 1. Initialize Camera
 async function initCamera() {
+    // Stop any existing stream first
+    if (video.srcObject) {
+        video.srcObject.getTracks().forEach(track => track.stop());
+    }
+
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ 
             video: { 
-                facingMode: "user",
+                facingMode: currentFacingMode,
                 width: { ideal: 1280 }, 
                 height: { ideal: 720 } 
             },
             audio: false 
         });
         video.srcObject = stream;
+        
+        // Handle Mirroring: Mirror Front camera, Don't mirror Back camera
+        if (currentFacingMode === 'user') {
+            video.style.transform = 'scaleX(-1)';
+        } else {
+            video.style.transform = 'scaleX(1)';
+        }
+
     } catch (err) {
-        alert("Camera access required.");
+        console.error(err);
+        alert("Camera access denied or not supported.");
     }
 }
 initCamera();
 
-// 2. Settings
+// 2. Switch Camera Button
+document.getElementById('switch-cam-btn').addEventListener('click', () => {
+    // Toggle Mode
+    currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
+    initCamera();
+});
+
+// 3. Settings
 window.setFormat = (count, layout) => {
     config.count = count;
     config.layout = layout;
@@ -48,11 +70,12 @@ window.setPaper = (color) => {
     createComposite(); 
 };
 
-// 3. Shutter Sequence
+// 4. Shutter Sequence
 document.getElementById('shutter-btn').addEventListener('click', async () => {
     capturedImages = [];
     document.querySelector('.layout-scroll').style.opacity = '0';
     document.getElementById('shutter-btn').style.pointerEvents = 'none';
+    document.getElementById('switch-cam-btn').style.opacity = '0'; // Hide switch during capture
     
     for (let i = 0; i < config.count; i++) {
         await runCountdown(3);
@@ -71,6 +94,7 @@ document.getElementById('shutter-btn').addEventListener('click', async () => {
 
     document.querySelector('.layout-scroll').style.opacity = '1';
     document.getElementById('shutter-btn').style.pointerEvents = 'auto';
+    document.getElementById('switch-cam-btn').style.opacity = '1';
 });
 
 function runCountdown(sec) {
@@ -96,13 +120,20 @@ function snapPhoto() {
     tCanvas.width = video.videoWidth;
     tCanvas.height = video.videoHeight;
     const tCtx = tCanvas.getContext('2d');
+    
+    // Mirror Logic applied to Capture
     tCtx.translate(tCanvas.width, 0);
-    tCtx.scale(-1, 1);
+    if (currentFacingMode === 'user') {
+        tCtx.scale(-1, 1); // Mirror
+    } else {
+        tCtx.scale(1, 1); // Normal
+    }
+    
     tCtx.drawImage(video, 0, 0);
     return tCanvas;
 }
 
-// 4. Composite
+// 5. Composite Logic
 function createComposite() {
     const gap = 20; const padding = 40; const footerH = 120;
     if(capturedImages.length === 0) return;
@@ -160,7 +191,7 @@ function createComposite() {
     baseState.src = canvas.toDataURL();
 }
 
-// 5. Render
+// 6. Render with Touch Fix
 function render() {
     if (!baseState) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -168,16 +199,17 @@ function render() {
     ctx.drawImage(baseState, 0, 0);
 }
 
+// Fix: Use currentTarget to ensure click hits the button, not the span inside
 document.querySelectorAll('.filter-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
         document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-        e.target.classList.add('active');
-        currentFilter = e.target.dataset.filter;
+        e.currentTarget.classList.add('active');
+        currentFilter = e.currentTarget.dataset.filter;
         render();
     });
 });
 
-// 6. Navigation
+// 7. Navigation
 document.getElementById('back-btn').addEventListener('click', () => {
     document.getElementById('result-page').classList.remove('active');
     document.getElementById('result-page').classList.add('hidden');
