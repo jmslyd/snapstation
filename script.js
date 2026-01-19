@@ -14,30 +14,28 @@ let currentFacingMode = 'user'; // Start with Front Camera
 let retakeIndex = -1;
 let photoZones = []; 
 
-// 1. Initialize Camera (Robust Fix)
+// 1. Initialize Camera (Robust & Constraint Free)
 async function initCamera() {
-    // 1. Stop any running streams to prevent conflicts
+    // Stop any existing stream
     if (video.srcObject) {
-        const tracks = video.srcObject.getTracks();
-        tracks.forEach(track => track.stop());
+        video.srcObject.getTracks().forEach(track => track.stop());
     }
 
     try {
-        // 2. Attempt to get camera with ideal settings
+        // Try strict constraints first (HD Quality)
         const stream = await navigator.mediaDevices.getUserMedia({ 
             video: { 
                 facingMode: currentFacingMode,
-                width: { ideal: 1280 }, // Soft preference, not forced
+                width: { ideal: 1280 }, 
                 height: { ideal: 720 }
             },
             audio: false 
         });
-        
         handleStreamSuccess(stream);
 
     } catch (err) {
-        console.warn("High-res init failed, retrying with basic settings...", err);
-        // 3. Fallback: If High-Res fails (White screen issue), try basic
+        console.warn("HD init failed, retrying with basic settings...");
+        // Fallback: Basic constraints (Fixes white screen on some Androids)
         try {
             const basicStream = await navigator.mediaDevices.getUserMedia({ 
                 video: { facingMode: currentFacingMode },
@@ -45,7 +43,7 @@ async function initCamera() {
             });
             handleStreamSuccess(basicStream);
         } catch (e) {
-            alert("Camera refused to load. Please restart the browser.");
+            alert("Camera refused to load. Please check permissions.");
         }
     }
 }
@@ -53,14 +51,14 @@ async function initCamera() {
 function handleStreamSuccess(stream) {
     video.srcObject = stream;
     
-    // Mirror Logic: Mirror Front (user), Normal Back (env)
+    // Preview Mirroring: Mirror Front, Normal Back
     if (currentFacingMode === 'user') {
         video.style.transform = 'scaleX(-1)';
     } else {
         video.style.transform = 'scaleX(1)';
     }
 
-    // Force Play (Fixes frozen frames on iOS)
+    // Force Play
     video.onloadedmetadata = () => {
         video.play().catch(e => console.log("Play error", e));
     };
@@ -68,9 +66,8 @@ function handleStreamSuccess(stream) {
 
 initCamera();
 
-// Switch Camera Button
+// Switch Camera
 document.getElementById('switch-cam-btn').addEventListener('click', () => {
-    // Toggle Mode
     currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
     initCamera();
 });
@@ -105,19 +102,23 @@ document.getElementById('shutter-btn').addEventListener('click', async () => {
     enterEditor();
 });
 
+// --- THE CRITICAL FIX ---
 function snapPhoto() {
     const tCanvas = document.createElement('canvas');
     tCanvas.width = video.videoWidth;
     tCanvas.height = video.videoHeight;
     const tCtx = tCanvas.getContext('2d');
     
-    tCtx.translate(tCanvas.width, 0);
-    // Apply Mirroring only if Front Camera
+    // BUG FIX: Only translate (move origin) if we are flipping the image!
     if (currentFacingMode === 'user') {
+        // Front Camera: Move to right edge, Flip left
+        tCtx.translate(tCanvas.width, 0);
         tCtx.scale(-1, 1); 
     } else {
+        // Back Camera: Draw normally (No translation needed)
         tCtx.scale(1, 1);
     }
+    
     tCtx.drawImage(video, 0, 0);
     return tCanvas;
 }
@@ -139,7 +140,7 @@ function finishRetake() {
     enterEditor();
 }
 
-// 3. Composite Logic (6 Grid Support + iOS Safe)
+// 3. Composite Logic
 function createComposite() {
     if(capturedImages.length === 0) return;
     photoZones = []; 
@@ -150,7 +151,6 @@ function createComposite() {
     
     let finalW, finalH;
 
-    // Detect Layout
     if (config.count === 6 && config.layout === 'grid') {
         finalW = (singleW * 2) + gap + (padding * 2);
         finalH = (singleH * 3) + (gap * 2) + (padding * 2) + footerH;
@@ -180,7 +180,6 @@ function createComposite() {
 
     capturedImages.forEach((img, i) => {
         let x, y;
-        // Layout Math
         if (config.count === 6 && config.layout === 'grid') {
             const col = i % 2;
             const row = Math.floor(i / 2);
@@ -198,7 +197,6 @@ function createComposite() {
             y = padding + (i * (singleH + gap));
         }
         
-        // Draw Scaled
         const dX = Math.floor(x * scaleFactor);
         const dY = Math.floor(y * scaleFactor);
         const dW = Math.floor(singleW * scaleFactor);
@@ -208,7 +206,6 @@ function createComposite() {
         photoZones.push({ index: i, x: dX, y: dY, w: dW, h: dH });
     });
 
-    // Branding
     ctx.textAlign = 'center';
     const isDark = (currentPaper === '#000000');
     ctx.fillStyle = isDark ? '#ffffff' : '#111111';
@@ -232,7 +229,7 @@ function render() {
     ctx.drawImage(baseState, 0, 0);
 }
 
-// 4. Click to Retake
+// 4. Tap to Retake
 canvas.addEventListener('click', (e) => {
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
@@ -258,7 +255,7 @@ function triggerRetake(idx) {
     document.getElementById('capture-page').classList.add('active');
 }
 
-// 5. Save/Share
+// 5. Save
 async function shareCanvas() {
     canvas.toBlob(async (blob) => {
         const file = new File([blob], "snapstation.png", { type: "image/png" });
