@@ -10,11 +10,10 @@ let capturedImages = [];
 let currentFilter = 'none';
 let currentPaper = '#ffffff'; 
 let baseState = null;
-let currentFacingMode = 'user'; // 'user' (Front) or 'environment' (Back)
+let currentFacingMode = 'user'; // Start with Front Camera
 
-// 1. Initialize Camera
+// 1. Initialize Camera (4:3 Ratio)
 async function initCamera() {
-    // Stop any existing stream first
     if (video.srcObject) {
         video.srcObject.getTracks().forEach(track => track.stop());
     }
@@ -23,30 +22,34 @@ async function initCamera() {
         const stream = await navigator.mediaDevices.getUserMedia({ 
             video: { 
                 facingMode: currentFacingMode,
-                width: { ideal: 1280 }, 
-                height: { ideal: 720 } 
+                // REQUEST 4:3 ASPECT RATIO
+                aspectRatio: { ideal: 1.3333 }, 
+                width: { ideal: 1280 } 
             },
             audio: false 
         });
         video.srcObject = stream;
         
-        // Handle Mirroring: Mirror Front camera, Don't mirror Back camera
+        // Mobile Mirror Logic
         if (currentFacingMode === 'user') {
             video.style.transform = 'scaleX(-1)';
         } else {
             video.style.transform = 'scaleX(1)';
         }
+        
+        // Ensure video plays on iOS
+        video.onloadedmetadata = () => {
+            video.play();
+        };
 
     } catch (err) {
-        console.error(err);
-        alert("Camera access denied or not supported.");
+        alert("Camera access denied.");
     }
 }
 initCamera();
 
-// 2. Switch Camera Button
+// 2. Switch Camera
 document.getElementById('switch-cam-btn').addEventListener('click', () => {
-    // Toggle Mode
     currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
     initCamera();
 });
@@ -70,12 +73,12 @@ window.setPaper = (color) => {
     createComposite(); 
 };
 
-// 4. Shutter Sequence
+// 4. Shutter
 document.getElementById('shutter-btn').addEventListener('click', async () => {
     capturedImages = [];
     document.querySelector('.layout-scroll').style.opacity = '0';
     document.getElementById('shutter-btn').style.pointerEvents = 'none';
-    document.getElementById('switch-cam-btn').style.opacity = '0'; // Hide switch during capture
+    document.getElementById('switch-cam-btn').style.opacity = '0';
     
     for (let i = 0; i < config.count; i++) {
         await runCountdown(3);
@@ -121,23 +124,23 @@ function snapPhoto() {
     tCanvas.height = video.videoHeight;
     const tCtx = tCanvas.getContext('2d');
     
-    // Mirror Logic applied to Capture
+    // Mirror Logic
     tCtx.translate(tCanvas.width, 0);
     if (currentFacingMode === 'user') {
-        tCtx.scale(-1, 1); // Mirror
+        tCtx.scale(-1, 1); 
     } else {
-        tCtx.scale(1, 1); // Normal
+        tCtx.scale(1, 1);
     }
-    
     tCtx.drawImage(video, 0, 0);
     return tCanvas;
 }
 
-// 5. Composite Logic
+// 5. Composite Logic (With iOS Memory Protection)
 function createComposite() {
-    const gap = 20; const padding = 40; const footerH = 120;
     if(capturedImages.length === 0) return;
 
+    // Dimensions
+    const gap = 20; const padding = 40; const footerH = 120;
     const singleW = capturedImages[0].width;
     const singleH = capturedImages[0].height;
     
@@ -152,12 +155,25 @@ function createComposite() {
         finalH = (singleH * 2) + gap + (padding * 2) + footerH;
     }
 
+    // --- CRITICAL iOS FIX: Scale down if too big ---
+    // iOS Canvas crashes above ~4096px height or 16MP area
+    let scaleFactor = 1;
+    const MAX_HEIGHT = 3000; 
+    
+    if (finalH > MAX_HEIGHT) {
+        scaleFactor = MAX_HEIGHT / finalH;
+        finalW = Math.floor(finalW * scaleFactor);
+        finalH = Math.floor(finalH * scaleFactor);
+    }
+
     canvas.width = finalW;
     canvas.height = finalH;
     
+    // Fill Background
     ctx.fillStyle = currentPaper;
     ctx.fillRect(0, 0, finalW, finalH);
 
+    // Draw Photos (Scaled)
     capturedImages.forEach((img, i) => {
         let x, y;
         if (isStrip) {
@@ -169,29 +185,38 @@ function createComposite() {
             x = padding + (col * (singleW + gap));
             y = padding + (row * (singleH + gap));
         }
-        ctx.drawImage(img, x, y);
+        
+        // Apply scaling
+        const drawX = Math.floor(x * scaleFactor);
+        const drawY = Math.floor(y * scaleFactor);
+        const drawW = Math.floor(singleW * scaleFactor);
+        const drawH = Math.floor(singleH * scaleFactor);
+
+        ctx.drawImage(img, drawX, drawY, drawW, drawH);
     });
 
+    // Branding
     ctx.textAlign = 'center';
     const isDarkPaper = (currentPaper === '#000000');
     
     ctx.fillStyle = isDarkPaper ? '#ffffff' : '#111111';
-    ctx.font = '900 32px Inter, sans-serif'; 
-    ctx.fillText('SNAPSTATION.IO', finalW / 2, finalH - 60);
+    ctx.font = `900 ${Math.floor(32 * scaleFactor)}px Inter, sans-serif`; 
+    ctx.fillText('SNAPSTATION.IO', finalW / 2, finalH - (60 * scaleFactor));
 
     ctx.fillStyle = isDarkPaper ? '#cccccc' : '#666666';
-    ctx.font = '500 18px Inter, sans-serif';
+    ctx.font = `500 ${Math.floor(18 * scaleFactor)}px Inter, sans-serif`;
     const date = new Date().toLocaleDateString(undefined, {  
         weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' 
     });
-    ctx.fillText(date.toUpperCase(), finalW / 2, finalH - 25);
+    ctx.fillText(date.toUpperCase(), finalW / 2, finalH - (25 * scaleFactor));
 
+    // Wait for load before render
     baseState = new Image();
     baseState.onload = () => render();
     baseState.src = canvas.toDataURL();
 }
 
-// 6. Render with Touch Fix
+// 6. Render
 function render() {
     if (!baseState) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -199,17 +224,22 @@ function render() {
     ctx.drawImage(baseState, 0, 0);
 }
 
-// Fix: Use currentTarget to ensure click hits the button, not the span inside
+// 7. Touch Events for Filters
 document.querySelectorAll('.filter-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
+    // Handle both Click and Touch to ensure mobile responsiveness
+    const handleFilter = (e) => {
+        e.preventDefault(); // Stop double firing
         document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
         e.currentTarget.classList.add('active');
         currentFilter = e.currentTarget.dataset.filter;
         render();
-    });
+    };
+
+    btn.addEventListener('click', handleFilter);
+    btn.addEventListener('touchstart', handleFilter);
 });
 
-// 7. Navigation
+// 8. Navigation
 document.getElementById('back-btn').addEventListener('click', () => {
     document.getElementById('result-page').classList.remove('active');
     document.getElementById('result-page').classList.add('hidden');
