@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>SnapStation Pro</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <div id="flash-overlay"></div>
+    <div id="countdown" class="hidden"></div>
+
+    <section id="capture-page" class="screen active">
+        <div class="top-bar">
+            <div class="brand">SNAP<span class="accent">STATION</span></div>
+            <div class="live-tag"><div class="red-dot"></div> LIVE</div>
+        </div>
+
+        <div class="video-container">
+            <video id="webcam" autoplay playsinline></video>
+        </div>
+
+        <div class="controls-dock">
+            <div class="layout-scroll">
+                <button class="layout-chip" onclick="setFormat(1, 'single')">1 Photo</button>
+                <button class="layout-chip" onclick="setFormat(3, 'strip')">3 Strip</button>
+                <button class="layout-chip active" onclick="setFormat(4, 'grid')">4 Grid</button>
+                <button class="layout-chip" onclick="setFormat(4, 'strip')">4 Strip</button>
+                <button class="layout-chip" onclick="setFormat(5, 'strip')">5 Strip</button>
+            </div>
+
+            <div class="shutter-zone">
+                <button id="shutter-btn" class="main-trigger">
+                    <div class="camera-lens"></div>
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <section id="result-page" class="screen hidden">
+        <div class="editor-nav">
+            <button id="back-btn" class="text-btn">← New Session</button>
+            <button id="download-btn" class="pill-btn primary">Download ⬇</button>
+        </div>
+
+        <div class="canvas-stage">
+            <canvas id="canvas"></canvas>
+        </div>
+
+        <div class="editor-dock">
+            
+            <div class="dock-section">
+                <span class="dock-label">FILTERS</span>
+                <div class="scroll-row">
+                    <button class="filter-btn active" data-filter="none">Normal</button>
+                    <button class="filter-btn" data-filter="grayscale(100%) contrast(1.5)">Ink</button>
+                    <button class="filter-btn" data-filter="brightness(1.2) contrast(0.8)">Dreamy</button>
+                    <button class="filter-btn" data-filter="sepia(0.4) saturate(1.5) contrast(1.1)">Earlybird</button>
+                    <button class="filter-btn" data-filter="brightness(1.1) saturate(1.4)">Kodak</button>
+                    <button class="filter-btn" data-filter="contrast(1.2) saturate(1.3)">Pop</button>
+                </div>
+            </div>
+
+            <div class="dock-section">
+                <span class="dock-label">PAPER COLOR</span>
+                <div class="scroll-row">
+                    <button class="color-dot active" style="background: #ffffff" onclick="setPaper('#ffffff')"></button>
+                    <button class="color-dot" style="background: #000000; border: 1px solid #333;" onclick="setPaper('#000000')"></button>
+                    <button class="color-dot" style="background: #f4e4bc" onclick="setPaper('#f4e4bc')"></button>
+                    <button class="color-dot" style="background: #ffd1dc" onclick="setPaper('#ffd1dc')"></button>
+                    <button class="color-dot" style="background: #e0e0e0" onclick="setPaper('#e0e0e0')"></button>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    <script src="script.js"></script>
+</body>
+</html>

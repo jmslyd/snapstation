@@ -1,0 +1,173 @@
+:root {
+    --bg: #000000;
+    --primary: #3b82f6;
+    --accent: #ff4757;
+    --text: #ffffff;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; }
+
+body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    height: 100vh;
+    height: 100dvh; /* Mobile Viewport Fix */
+    overflow: hidden;
+    overscroll-behavior: none;
+}
+
+/* SCREEN ANIMATIONS */
+.screen {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    background: #000;
+    transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+    z-index: 1;
+}
+.screen.hidden { transform: translateY(100%); pointer-events: none; }
+.screen.active { transform: translateY(0); }
+
+/* --- CAMERA UI --- */
+.top-bar {
+    position: absolute; top: 0; left: 0; right: 0;
+    padding: 20px; 
+    padding-top: max(20px, env(safe-area-inset-top));
+    display: flex; justify-content: space-between; align-items: center;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+    z-index: 50; pointer-events: none;
+}
+.top-bar > * { pointer-events: auto; }
+
+.brand { font-weight: 900; font-size: 1.2rem; letter-spacing: -1px; }
+.accent { color: var(--primary); }
+.live-tag {
+    font-size: 0.7rem; font-weight: 700; background: rgba(255,255,255,0.15);
+    padding: 6px 12px; border-radius: 20px; display: flex; align-items: center; gap: 6px;
+}
+.red-dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; animation: blink 1s infinite; }
+
+.video-container {
+    flex: 1; width: 100%; height: 100%;
+    display: flex; justify-content: center; align-items: center;
+    position: relative; z-index: 0;
+}
+video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+
+.controls-dock {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.95) 30%, transparent);
+    padding: 20px; 
+    padding-bottom: max(30px, env(safe-area-inset-bottom));
+    display: flex; flex-direction: column; align-items: center; gap: 20px;
+    z-index: 50;
+    width: 100%; /* Ensure full width for scrolling */
+}
+
+/* SCROLLABLE AREAS (The Fix) */
+.layout-scroll, .scroll-row {
+    display: flex; 
+    gap: 12px; 
+    overflow-x: auto; /* Enable Scroll */
+    width: 100%;
+    max-width: 100%;
+    padding: 4px 20px; /* Add side padding so first/last items aren't cut off */
+    /* Mobile Scroll Physics */
+    -webkit-overflow-scrolling: touch; 
+    scrollbar-width: none; /* Hide scrollbar Firefox */
+    
+    /* CRITICAL FIX: Prevent wrapping */
+    flex-wrap: nowrap;
+    justify-content: flex-start; 
+}
+.layout-scroll::-webkit-scrollbar, .scroll-row::-webkit-scrollbar { display: none; }
+
+.layout-chip {
+    background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.1);
+    color: #ddd; padding: 10px 18px; 
+    border-radius: 20px;
+    font-size: 0.85rem; white-space: nowrap; cursor: pointer; backdrop-filter: blur(5px);
+    flex-shrink: 0; /* Prevent shrinking */
+}
+.layout-chip.active { background: var(--text); color: black; font-weight: 700; border-color: white; }
+
+/* Shutter */
+.shutter-zone { display: flex; justify-content: center; pointer-events: auto; }
+.main-trigger {
+    width: 80px; height: 80px;
+    border-radius: 50%; background: transparent;
+    border: 4px solid white; cursor: pointer;
+    display: flex; justify-content: center; align-items: center;
+    transition: transform 0.1s;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+}
+.main-trigger:active { transform: scale(0.95); }
+.camera-lens { width: 64px; height: 64px; background: white; border-radius: 50%; transition: 0.2s; }
+.main-trigger:active .camera-lens { width: 58px; height: 58px; background: var(--accent); }
+
+/* --- EDITOR UI --- */
+#result-page { background: #111; z-index: 60; }
+
+.editor-nav {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 15px 20px; 
+    padding-top: max(20px, env(safe-area-inset-top));
+    border-bottom: 1px solid #222; background: #111;
+}
+.text-btn { background: none; border: none; color: #888; cursor: pointer; font-size: 0.9rem; padding: 10px; }
+.pill-btn {
+    background: var(--primary); color: white; border: none;
+    padding: 12px 24px; border-radius: 30px; font-weight: 600; cursor: pointer;
+}
+
+.canvas-stage {
+    flex: 1; background: #080808;
+    display: flex; justify-content: center; align-items: center;
+    position: relative; overflow: hidden; padding: 20px;
+}
+canvas {
+    max-width: 100%; max-height: 100%;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+}
+
+.editor-dock {
+    background: #1a1a1a; padding: 20px 0; /* Remove side padding from parent */
+    padding-bottom: max(30px, env(safe-area-inset-bottom));
+    border-top: 1px solid #333;
+    width: 100vw; /* Force full width */
+}
+.dock-section { margin-bottom: 20px; }
+.dock-label { 
+    display: block; font-size: 0.7rem; color: #555; font-weight: 800; 
+    margin-bottom: 10px; padding-left: 20px; /* Align label with content */
+}
+
+.filter-btn {
+    background: #333; color: #ccc; border: none;
+    padding: 12px 20px; border-radius: 12px;
+    font-size: 0.9rem; white-space: nowrap; cursor: pointer;
+    flex-shrink: 0; /* Prevent shrinking */
+}
+.filter-btn.active { background: white; color: black; }
+
+.color-dot {
+    width: 40px; height: 40px;
+    border-radius: 50%; border: 2px solid transparent;
+    cursor: pointer; flex-shrink: 0;
+    transition: transform 0.2s, border-color 0.2s;
+}
+.color-dot.active { border-color: var(--primary); transform: scale(1.1); }
+
+/* OVERLAYS */
+#flash-overlay { 
+    position: fixed; inset: 0; background: white; 
+    opacity: 0; pointer-events: none; z-index: 100; transition: 0.1s; 
+}
+.flash-fire { opacity: 1 !important; }
+
+#countdown {
+    position: fixed; inset: 0; display: flex; justify-content: center; align-items: center;
+    font-size: 10rem; font-weight: 900; color: white; z-index: 101;
+    text-shadow: 0 10px 30px rgba(0,0,0,0.5); pointer-events: none;
+}
+@keyframes blink { 50% { opacity: 0.5; } }
